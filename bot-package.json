@@ -1,0 +1,15 @@
+{
+  "name": "ict-regime-bot",
+  "version": "1.0.0",
+  "description": "ICT RegimeAI Autonomous Trading Bot for Tradovate",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
