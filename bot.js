@@ -178,7 +178,7 @@ function connectMD() {
   const url = CFG.demo
     ? `wss://md-demo.tradovateapi.com/v1/websocket?token=${accessToken}`
     : `wss://md.tradovateapi.com/v1/websocket?token=${accessToken}`;
-  log('system', `MD WebSocket connecting... delay=${_mdReconnectDelay/1000}s PID=${process.pid}`);
+ log('system', `MD WebSocket connecting... delay=${_mdReconnectDelay/1000}s PID=${process.pid} token=${accessToken ? accessToken.slice(0,10)+'...' : 'NULL'}`);
 
   mdWs = new WebSocket(url);
   let frameId = 1;
