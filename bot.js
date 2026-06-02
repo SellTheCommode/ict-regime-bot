@@ -36,6 +36,7 @@ const INSTRUMENTS = {
   MGC: { tv: 10, ts: 0.1, margin: 50 },
 };
 const ACTIVE_SYMS = ['MNQ', 'MES', 'MYM', 'MCL', 'MGC'];
+const MD_TEST_SYMS = ['MNQ']; // temporary: test one symbol
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 let accessToken = null;
@@ -218,17 +219,23 @@ function connectMD() {
       if (isAuth) {
         const failed = (frame.d && frame.d.errorCode) || frame.s === 'error';
         if (!failed) {
-          log('system', 'MD authorized -- subscribing to quotes...');
-          _mdReconnectDelay = 5000; // reset backoff on success
-          ACTIVE_SYMS.forEach((sym, idx) => {
-            const contract = CONTRACT_MAP[sym];
-            if (contract) {
-              setTimeout(() => {
-                send('md/subscribeQuote', { symbol: contract });
-                log('system', `Subscribed to ${contract}`);
-              }, idx * 300);
-            }
-          });
+         log('system', 'MD authorized -- subscribing to quotes...');
+setTimeout(() => {
+  if (mdWs && mdWs.readyState === WebSocket.OPEN) {
+    _mdReconnectDelay = 5000;
+    log('system', 'MD stable 3min -- backoff reset');
+  }
+}, 180000);
+          MD_TEST_SYMS.forEach((sym, idx) => {
+  const contract = CONTRACT_MAP[sym];
+  if (contract) {
+    setTimeout(() => {
+      const payload = { symbol: contract };
+      log('system', `Subscribing: md/subscribeQuote ${JSON.stringify(payload)}`);
+      send('md/subscribeQuote', payload);
+    }, idx * 300);
+  }
+});
         } else {
           log('warn', `MD auth failed: ${frame.d?.errorCode || frame.s}`);
         }
