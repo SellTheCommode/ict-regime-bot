@@ -213,6 +213,7 @@ function connectMD() {
 
     for (const frame of frames) {
       if (!frame) continue;
+      log('system', `MD_FRAME: ${JSON.stringify(frame).slice(0, 200)}`);
 
       const isAuth = frame.e === 'authorize' || frame.i === 1 ||
         (frame.s === 'ok' && frame.i !== undefined) ||
@@ -220,24 +221,19 @@ function connectMD() {
 
       if (isAuth) {
         const failed = (frame.d && frame.d.errorCode) || frame.s === 'error';
-        if (!failed) {
-         log('system', 'MD authorized -- subscribing to quotes...');
-setTimeout(() => {
-  if (mdWs && mdWs.readyState === WebSocket.OPEN) {
-    _mdReconnectDelay = 5000;
-    log('system', 'MD stable 3min -- backoff reset');
-  }
-}, 180000);
-          MD_TEST_SYMS.forEach((sym, idx) => {
-  const contract = CONTRACT_MAP[sym];
-  if (contract) {
-    setTimeout(() => {
-      const payload = { symbol: contract };
-      log('system', `Subscribing: md/subscribeQuote ${JSON.stringify(payload)}`);
-      send('md/subscribeQuote', payload);
-    }, idx * 300);
-  }
-});
+       if (!failed) {
+          log('system', 'MD authorized -- subscribing to quotes...');
+          // Test contractId-based subscription using known MNQM6 id
+          setTimeout(() => {
+            const payloadSym = { symbol: 'MNQM6' };
+            const payloadId = { contractId: 4327110 };
+            log('system', `SUB_TEST_1 symbol: ${JSON.stringify(payloadSym)}`);
+            send('md/subscribeQuote', payloadSym);
+            setTimeout(() => {
+              log('system', `SUB_TEST_2 contractId: ${JSON.stringify(payloadId)}`);
+              send('md/subscribeQuote', payloadId);
+            }, 2000);
+          }, 500);
         } else {
           log('warn', `MD auth failed: ${frame.d?.errorCode || frame.s}`);
         }
