@@ -121,6 +121,7 @@ async function authenticate() {
     });
     if (res.accessToken) {
       accessToken = res.accessToken;
+      global._tokenFetchTime = Date.now();
       log('system', 'Auth OK -- token acquired');
       return true;
     } else {
@@ -178,7 +179,8 @@ function connectMD() {
   const url = CFG.demo
     ? `wss://md-demo.tradovateapi.com/v1/websocket?token=${accessToken}`
     : `wss://md.tradovateapi.com/v1/websocket?token=${accessToken}`;
- log('system', `MD WebSocket connecting... delay=${_mdReconnectDelay/1000}s PID=${process.pid} token=${accessToken ? accessToken.slice(0,10)+'...' : 'NULL'}`);
+ const tokenAge = accessToken ? Math.floor((Date.now() - (global._tokenFetchTime||Date.now()))/1000) : -1;
+  log('system', `MD_URL_BASE=${url} HAS_ACCESS_TOKEN=${!!accessToken} TOKEN_LENGTH=${accessToken?accessToken.length:0} TOKEN_AGE_SECONDS=${tokenAge} FULL_URL_MASKED=${url.replace(accessToken||'','TOKEN')}`);
 
   mdWs = new WebSocket(url);
   let frameId = 1;
