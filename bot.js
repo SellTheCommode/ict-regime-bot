@@ -177,8 +177,8 @@ function connectMD() {
   _mdHb = null;
 
   const url = CFG.demo
-    ? `wss://md-demo.tradovateapi.com/v1/websocket?token=${accessToken}`
-    : `wss://md.tradovateapi.com/v1/websocket?token=${accessToken}`;
+    ? 'wss://md-demo.tradovateapi.com/v1/websocket'
+    : 'wss://md.tradovateapi.com/v1/websocket';
  const tokenAge = accessToken ? Math.floor((Date.now() - (global._tokenFetchTime||Date.now()))/1000) : -1;
   log('system', `MD_URL_BASE=${url} HAS_ACCESS_TOKEN=${!!accessToken} TOKEN_LENGTH=${accessToken?accessToken.length:0} TOKEN_AGE_SECONDS=${tokenAge} FULL_URL_MASKED=${url.replace(accessToken||'','TOKEN')}`);
 
