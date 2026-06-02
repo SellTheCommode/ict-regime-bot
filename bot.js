@@ -163,14 +163,24 @@ class BarAgg {
 const aggregators = {};
 
 // ─── MARKET DATA WEBSOCKET ─────────────────────────────────────────────────
+let _mdHb = null;
+let _mdReconnectDelay = 5000;
+
 function connectMD() {
-  if (mdWs) { try { mdWs.close(); } catch (e) {} }
-  const url = CFG.demo ? 'wss://md-demo.tradovateapi.com/v1/websocket' : 'wss://md.tradovateapi.com/v1/websocket';
-  log('system', `MD WebSocket connecting to ${url}...`);
+  if (mdWs) {
+    try { mdWs.removeAllListeners(); mdWs.terminate(); } catch (e) {}
+    mdWs = null;
+  }
+  clearInterval(_mdHb);
+  _mdHb = null;
+
+  const url = CFG.demo
+    ? `wss://md-demo.tradovateapi.com/v1/websocket?token=${accessToken}`
+    : `wss://md.tradovateapi.com/v1/websocket?token=${accessToken}`;
+  log('system', `MD WebSocket connecting... delay=${_mdReconnectDelay/1000}s PID=${process.pid}`);
 
   mdWs = new WebSocket(url);
   let frameId = 1;
-  let hb = null;
 
   function send(op, body) {
     if (mdWs.readyState !== WebSocket.OPEN) return;
@@ -178,14 +188,18 @@ function connectMD() {
   }
 
   mdWs.on('open', () => {
-    log('system', 'MD socket open -- authorizing...');
-    send('authorize', { token: accessToken });
-    hb = setInterval(() => { try { mdWs.send('[]'); } catch (e) {} }, 2500);
+    log('system', 'MD socket open -- waiting for Atmosphere frame...');
   });
 
   mdWs.on('message', (raw) => {
     const str = raw.toString();
-    if (str === 'o') { log('system', 'MD Atmosphere open'); return; }
+
+    if (str === 'o') {
+      log('system', 'MD Atmosphere open -- authorizing...');
+      send('authorize', { token: accessToken });
+      _mdHb = setInterval(() => { try { mdWs.send('[]'); } catch (e) {} }, 2500);
+      return;
+    }
     if (str === 'h' || !str || str.length < 2) return;
 
     let frames = [];
@@ -197,7 +211,6 @@ function connectMD() {
     for (const frame of frames) {
       if (!frame) continue;
 
-      // Auth response
       const isAuth = frame.e === 'authorize' || frame.i === 1 ||
         (frame.s === 'ok' && frame.i !== undefined) ||
         (frame.d && frame.d.accessToken !== undefined);
@@ -206,11 +219,14 @@ function connectMD() {
         const failed = (frame.d && frame.d.errorCode) || frame.s === 'error';
         if (!failed) {
           log('system', 'MD authorized -- subscribing to quotes...');
-          ACTIVE_SYMS.forEach(sym => {
+          _mdReconnectDelay = 5000; // reset backoff on success
+          ACTIVE_SYMS.forEach((sym, idx) => {
             const contract = CONTRACT_MAP[sym];
             if (contract) {
-              send('md/subscribeQuote', { symbol: contract });
-              log('system', `Subscribed to ${contract}`);
+              setTimeout(() => {
+                send('md/subscribeQuote', { symbol: contract });
+                log('system', `Subscribed to ${contract}`);
+              }, idx * 300);
             }
           });
         } else {
@@ -219,7 +235,6 @@ function connectMD() {
         continue;
       }
 
-      // Quote data
       if (frame.e === 'md' || frame.e === 'quote' || (frame.d && frame.d.quotes) ||
           (frame.d && frame.d.contractId) || (frame.d && frame.d.symbol)) {
         const quotes = frame.d?.quotes || (frame.d ? [frame.d] : []);
@@ -248,12 +263,15 @@ function connectMD() {
   });
 
   mdWs.on('close', (code) => {
-    clearInterval(hb);
-    log('warn', `MD closed ${code} -- reconnecting in 5s...`);
+    clearInterval(_mdHb);
+    _mdHb = null;
+    const delay = code === 429 ? 60000 : code === 1000 || code === 1001 ? 15000 : _mdReconnectDelay;
+    _mdReconnectDelay = Math.min(_mdReconnectDelay * 1.5, 60000);
+    log('warn', `MD closed ${code} -- reconnecting in ${delay/1000}s...`);
     reconnectTimer = setTimeout(() => {
       if (accessToken) connectMD();
       else authenticate().then(ok => ok && connectMD());
-    }, 5000);
+    }, delay);
   });
 
   mdWs.on('error', (e) => {
@@ -806,7 +824,8 @@ const server = http.createServer((req, res) => {
 // ─── STARTUP ───────────────────────────────────────────────────────────────
 async function start() {
   const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => log('system', `Dashboard running on port ${PORT}`));
+    server.listen(PORT, () => log('system', `Dashboard running on port ${PORT}`));
+log('system', `START PID=${process.pid} commit=${process.env.RENDER_GIT_COMMIT||'local'} reconnectDelay=${_mdReconnectDelay/1000}s subscribeSpread=300ms`);
   initBars();
   log('system', `ICT RegimeAI Bot starting -- mode: ${CFG.demo?'DEMO':'LIVE'} -- ${CFG.paperOnly?'PAPER TRADING':'LIVE ORDERS'}`);
   log('system', `Symbols: ${ACTIVE_SYMS.join(', ')} -- Scan every ${CFG.scanSec}s -- Min score: ${CFG.minScore}`);
